@@ -1,20 +1,44 @@
 <script lang="ts">
+    import { PUBLIC_POCKETBASE_URL } from '$env/static/public';
+    import { enhance } from '$app/forms';
+    import PocketBase from 'pocketbase';
     import * as Dialog from "$lib/components/ui/dialog/index"
     import { Button } from "$lib/components/ui/button";
-	import { onMount } from "svelte";
+	import { onDestroy, onMount } from "svelte";
 	import Box from "$lib/components/Box.svelte";
     
+    // Pocketbase SSE
+    const pb = new PocketBase(PUBLIC_POCKETBASE_URL);
+
     let likes = $state(0);
     let boxes: { id: number; x: number; y: number }[] = $state([]);
     let nextId = $state(0);
     let isTermsOpen = $state(false);
     let isReadytoBless = $state(false);
-    onMount(() => {
+
+    async function getLikes() {
+        const likes_collection = await pb.collection('likes').getOne('m92t9a16esiv7ml');
+        console.log(likes_collection.likes);
+        return likes_collection.likes;
+    }
+
+    pb.collection('likes').subscribe('m92t9a16esiv7ml', async (event) => {
+        console.log(event.action);
+        console.log(event.record);
+        likes = event.record.likes;
+    })
+
+    // Life cycles
+    onMount(async () => {
         isTermsOpen = true;
+        likes = await getLikes();
     });
 
+    onDestroy(() => {
+        pb.collection('likes').unsubscribe('m92t9a16esiv7ml');
+    })
+
     function handleClick(event: MouseEvent) {
-        likes++;
         const { clientX, clientY } = event;
         const newBox = { id: nextId++, x: clientX, y: clientY };
         boxes = [...boxes, newBox];
@@ -47,14 +71,16 @@
             {#each boxes as box (box.id)}
                 <Box x={box.x} y={box.y} />
             {/each}
-            <button onclick={handleClick}>
-                <img 
-                draggable="false"
-                src="https://media.discordapp.net/attachments/915498091350728704/1043254984994734100/peopray.png?ex=677799ab&is=6776482b&hm=67499352282d1c405636e0f11a9bdd99ab0064faacbe5ccd11fd8d79633fd593&=&format=webp&quality=lossless" 
-                alt="Peo blessing"
-                class="w-96 h-96 cursor-pointer shadow-lg rounded-lg select-none"
-                >
-            </button>
+            <form action="?/addLike" method="post" use:enhance>            
+                <button type="submit" onclick={handleClick}>
+                    <img 
+                    draggable="false"
+                    src="https://media.discordapp.net/attachments/915498091350728704/1043254984994734100/peopray.png?ex=677799ab&is=6776482b&hm=67499352282d1c405636e0f11a9bdd99ab0064faacbe5ccd11fd8d79633fd593&=&format=webp&quality=lossless" 
+                    alt="Peo blessing"
+                    class="w-96 h-96 cursor-pointer shadow-lg rounded-lg select-none"
+                    >
+                </button>
+            </form>
             <Button variant="secondary" class="rounded-full">{likes}</Button>
         </div>
         <div class={isReadytoBless ? "hidden" : "flex flex-col items-center justify-center space-y-4"}>
